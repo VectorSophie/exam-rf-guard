@@ -19,7 +19,18 @@ class DeviceIdentityResolver(
 ) {
     private val macPattern = Regex("[0-9A-F]{12}")
 
-    fun resolve(address: String, name: String?, sources: Set<ScanSource>, manufacturerIds: Set<Int>): DeviceIdentity {
+    private data class Query(val address: String, val name: String?, val sources: Set<ScanSource>, val manufacturerIds: Set<Int>)
+
+    /** 화면 갱신마다 지금까지 잡힌 주소 전부를 다시 조회한다. 결과는 입력에만 달려 있으므로 같은 입력은 한 번만 계산한다. */
+    private val cache = object : LinkedHashMap<Query, DeviceIdentity>(256, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Query, DeviceIdentity>) = size > CACHE_SIZE
+    }
+
+    @Synchronized
+    fun resolve(address: String, name: String?, sources: Set<ScanSource>, manufacturerIds: Set<Int>): DeviceIdentity =
+        cache.getOrPut(Query(address, name, sources, manufacturerIds)) { lookup(address, name, sources, manufacturerIds) }
+
+    private fun lookup(address: String, name: String?, sources: Set<ScanSource>, manufacturerIds: Set<Int>): DeviceIdentity {
         val mac = address.replace(":", "").replace("-", "").uppercase()
         val validMac = mac.matches(macPattern)
         val firstOctet = if (validMac) mac.take(2).toInt(16) else 0
@@ -31,5 +42,9 @@ class DeviceIdentityResolver(
         val audio = if (ScanSource.BLE in sources) AudioNameCatalog.match(name) else null
         val wearable = if (ScanSource.BLE in sources) WearableNameCatalog.match(name) else null
         return DeviceIdentity(companies, organization, audio, wearable)
+    }
+
+    private companion object {
+        const val CACHE_SIZE = 4096
     }
 }

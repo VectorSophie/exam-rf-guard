@@ -58,4 +58,26 @@ class DeviceIdentityTest {
         assertTrue(companies[117]!!.contains("Samsung"))
         assertTrue(companies.size >= 4000)
     }
+
+    @Test fun repeatedLookupsMatchAFreshResolverEvenAfterOldEntriesAreDropped() {
+        val vendors = mapOf("001122" to "Registered Vendor")
+        val companies = mapOf(76 to "Apple, Inc.")
+        val cached = DeviceIdentityResolver(vendors, companies)
+        fun query(i: Int) = Triple("00:11:22:%02X:%02X:%02X".format(i shr 16 and 0xFF, i shr 8 and 0xFF, i and 0xFF), if (i % 3 == 0) "AirPods Pro" else null, setOf(76))
+        // 조회 결과를 보관하는 개수보다 많이 조회한 뒤, 맨 처음 것을 다시 조회한다.
+        (0 until 5_000).forEach { i -> query(i).let { (address, name, ids) -> cached.resolve(address, name, setOf(ScanSource.BLE), ids) } }
+        listOf(0, 3, 4_999).forEach { i ->
+            val (address, name, ids) = query(i)
+            assertEquals(DeviceIdentityResolver(vendors, companies).resolve(address, name, setOf(ScanSource.BLE), ids),
+                cached.resolve(address, name, setOf(ScanSource.BLE), ids))
+        }
+    }
+
+    @Test fun aChangedNameOrCompanyIdIsLookedUpAgain() {
+        val first = resolver.resolve("DA:11:22:33:44:55", null, setOf(ScanSource.BLE), emptySet())
+        assertNull(first.audioNameMatch)
+        assertEquals("Apple", resolver.resolve("DA:11:22:33:44:55", "AirPods Pro", setOf(ScanSource.BLE), emptySet()).audioNameMatch!!.brand)
+        assertEquals(listOf("Apple, Inc."), resolver.resolve("DA:11:22:33:44:55", null, setOf(ScanSource.BLE), setOf(76)).advertisedCompanies)
+        assertNull(resolver.resolve("DA:11:22:33:44:55", "AirPods Pro", setOf(ScanSource.WIFI), emptySet()).audioNameMatch)
+    }
 }
