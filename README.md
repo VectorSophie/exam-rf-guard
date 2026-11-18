@@ -101,6 +101,7 @@
 - 와이파이 탐색은 30초 간격입니다. 켠 뒤 화면에 뜨기까지 30초~1분이 걸릴 수 있습니다.
 - 가장 셀 때도 −85 dBm보다 약한 전파는 따로 모으고 새 전파로 세지 않습니다.
 - **아무것도 잡히지 않아도 기기가 없다는 뜻이 아닙니다.**
+- 화면이 조용하다고 탐색이 정상이라는 뜻도 아닙니다. 블루투스 탐색이 오류로 멈추거나 시스템이 와이파이 탐색을 제한한 동안에는 그 무선의 새 전파가 화면에 나오지 않고, 지금 버전은 이 상태를 따로 표시하지 않습니다.
 - **새 전파는 확인이 필요하다는 표시일 뿐 증거가 아닙니다.** 옆 교실, 복도, 감독관 본인의 기기도 잡힙니다.
 - 종류·제조사·모델 표시는 기기가 스스로 알린 값에서 읽은 후보입니다. 바꾸거나 흉내 낼 수 있습니다.
 - 거리는 수신 세기로 어림한 값이며 벽과 사람에 따라 달라집니다.
@@ -180,6 +181,10 @@ APK는 `app/build/outputs/apk/debug/app-debug.apk`에 생깁니다. 구조와 �
 KoriyoSCAN is an Android app for exam proctors. It records the Wi-Fi access points and Bluetooth Low Energy advertisements present in an empty room, then flags signals that were not in that record once the exam is under way, and helps walk toward one by signal strength.
 
 It cannot detect every device. It only sees Wi-Fi access points and BLE advertisements, so it misses devices that use cellular data only, wired or record-only cameras, Bluetooth Classic devices, and anything that stops advertising once connected. It does not block signals and does not decide whether anyone cheated. Field accuracy has not been measured.
+
+An empty list does not mean the room is clear, and a quiet screen does not mean scanning is healthy: a failed Bluetooth scan or a throttled Wi-Fi scan is not shown on screen in the current version (a radio that is switched off is). Signals from the next room or the corridor are picked up too, so a new signal only means something needs checking. Names, company IDs and device types are whatever the device advertises and can be changed or copied. The distance label comes from signal strength with an assumed reference value, and it changes with walls and people in the way. Nothing in a signal identifies who owns the device or where they sit.
+
+Some new signals are never flagged: a Wi-Fi network that copies a recorded name on a fixed manufacturer address (when the recorded one also used such an address), any Wi-Fi network whose address differs from a recorded one only in the first or last byte, a Bluetooth device that takes over a recorded name after the original has left, and Bluetooth advertisements whose only type hint is Apple's Find My format, which are counted separately and never flagged because submitted iPhones that are switched off send them too.
 
 Records stay on the phone; the app declares no internet permission. The UI and the rest of this document are in Korean. Licensed under Apache-2.0; see [NOTICE](NOTICE) for the icon and bundled registry data.
 
