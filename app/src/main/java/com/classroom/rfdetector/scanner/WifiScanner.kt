@@ -28,6 +28,9 @@ class WifiScanner(context: Context, private val scope: CoroutineScope) {
     /** 이번 탐색에서 끝까지 완료된 탐색 횟수. 빈 교실 기록이 충분한지 판단하는 데 쓴다. */
     @Volatile var completedScans: Int = 0
         private set
+    /** 마지막으로 완료 알림을 받은 시각. 화면에서 탐색이 멈췄는지 보여 주는 데 쓴다. */
+    @Volatile var lastCompletedAtMs: Long? = null
+        private set
     private var job: Job? = null
     private var receiver: BroadcastReceiver? = null
     private val observedTimestamps = mutableMapOf<String, Long>()
@@ -38,6 +41,7 @@ class WifiScanner(context: Context, private val scope: CoroutineScope) {
         stop()
         lastError = null
         completedScans = 0
+        lastCompletedAtMs = null
         observedTimestamps.clear()
         val startedAtElapsedUs = SystemClock.elapsedRealtimeNanos() / 1000
         val listener = object : BroadcastReceiver() {
@@ -55,6 +59,7 @@ class WifiScanner(context: Context, private val scope: CoroutineScope) {
                     }
                     lastError = null
                     completedScans++
+                    lastCompletedAtMs = now
                     results.forEach { result ->
                         val key = radioKey(ScanSource.WIFI, result.BSSID)
                         val previousTimestamp = observedTimestamps[key]

@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.classroom.rfdetector.AppViewModel
@@ -125,21 +126,7 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                     }
                 }
                 GuardPhase.COLLECT -> {
-                    item {
-                        GuardPanel {
-                            Text(if (collected) "충분히 모았습니다" else "빈 교실 전파를 모으는 중", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                GuardCount("블루투스", devices.count { it.source == ScanSource.BLE }, Modifier.weight(1f))
-                                GuardCount("와이파이", devices.count { it.source == ScanSource.WIFI }, Modifier.weight(1f))
-                            }
-                            LinearProgressIndicator(progress = { (elapsed / COLLECT_SECONDS.toFloat()).coerceAtMost(1f) }, modifier = Modifier.fillMaxWidth())
-                            Text(when {
-                                collected -> "아래 버튼을 누르면 지금까지 잡힌 ${devices.size}개를 이 교실에 원래 있던 전파로 기록하고 감시를 시작합니다."
-                                elapsed < COLLECT_SECONDS -> "${minSec(COLLECT_SECONDS - elapsed)} 남음. 교실 안을 천천히 한 바퀴 걸어 보세요. 늦게 잡히는 전파까지 기록해야 시험 중에 새 전파로 잘못 뜨지 않습니다."
-                                else -> "와이파이 탐색이 끝나기를 기다리는 중입니다. 잠시 뒤 저장할 수 있습니다."
-                            }, color = if (collected) RfColors.primary else RfColors.textDim)
-                        }
-                    }
+                    item { CollectPanel(collected, elapsed, devices.count { it.source == ScanSource.BLE }, devices.count { it.source == ScanSource.WIFI }) }
                     problemItems(problems)
                     examModeItems(airplaneOff && !simulation, silenceMissing && !simulation)
                     item {
@@ -154,35 +141,12 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
                     val watching = phase == GuardPhase.WATCH
                     val found = watch.count > 0
                     item {
-                        val incomplete = watching && problems.isNotEmpty()
-                        Surface(color = if (!watching || incomplete) RfColors.surfaceAlt else if (found) warnDim else okDim, shape = RoundedCornerShape(20.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                    val accent = if (!watching) RfColors.textDim else if (found || incomplete) RfColors.warning else RfColors.ok
-                                    Box(Modifier.size(48.dp).background(accent, CircleShape), contentAlignment = Alignment.Center) {
-                                        if (watching && found) Text("${watch.count}", color = RfColors.bg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
-                                        else if (incomplete) Text("!", color = RfColors.bg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
-                                        else RfGlyph(RfSymbol.CHECK, size = 28.dp, color = RfColors.bg)
-                                    }
-                                    Text(when {
-                                        !watching -> "감시를 끝냈습니다"
-                                        found -> "새 전파 ${watch.count}개 발견"
-                                        incomplete -> "감시가 완전하지 않습니다"
-                                        else -> "새 전파 없음"
-                                    }, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = if (watching) accent else RfColors.textPrimary)
-                                }
-                                Text(if (watching) "감시 중 · ${minSec(elapsed)} 경과" else "지금은 전파를 받지 않습니다")
-                                if (watching) Text(when {
-                                    found -> "빈 교실에 없던 전파가 지금 잡히고 있습니다. 줄을 눌러 다가가며 세기를 확인하세요. 사라지면 목록에서 빠집니다."
-                                    incomplete -> "아래 문제를 해결하기 전까지는 전파가 있어도 표시되지 않을 수 있습니다."
-                                    else -> "지금 잡히는 전파는 모두 빈 교실 기록에 있던 것입니다."
-                                }, color = RfColors.textDim, style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
+                        WatchStatus(WatchStatusState(watching, if (watching) watch.count else 0, minSec(elapsed),
+                            if (watching) radioLines(vm, problems, simulation, tick) else emptyList()))
                     }
                     examModeItems(airplaneOff && !simulation, silenceMissing && !simulation)
                     if (watching) {
-                        item { Text("이 화면이 켜져 있는 동안에만 감시합니다. 화면은 자동으로 꺼지지 않으니 전원 버튼을 누르거나 다른 앱으로 가지 마세요. 충전기를 꽂아 두면 좋습니다.${if (silenceMissing || simulation) "" else " 감시 중에는 전화·알림·알람이 울리지 않게 휴대폰을 무음으로 바꿔 둡니다."}", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
+                        item { Text("이 화면이 켜져 있는 동안에만 감시합니다. 전원 버튼을 누르거나 다른 앱으로 가면 멈춥니다.${if (silenceMissing || simulation) "" else " 감시 중에는 전화·알림·알람이 울리지 않게 휴대폰을 무음으로 바꿔 둡니다."}", color = RfColors.textDim, style = MaterialTheme.typography.bodySmall) }
                         problemItems(problems)
                         session?.takeIf { it.pauses > 0 }?.let {
                             item { GuardNotice("앱을 벗어나 있던 시간이 있습니다", "${it.pauses}회, 총 ${minSec((it.pausedMs / 1000).toInt())} 동안은 전파를 받지 못했습니다. 화면을 끄거나 다른 앱을 쓰는 동안에는 감시가 멈추고, 돌아오면 자동으로 이어집니다.") }
@@ -210,7 +174,6 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
         }
         Surface(color = RfColors.surface) {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (phase == GuardPhase.WATCH || phase == GuardPhase.ENDED) Text("이 앱은 와이파이와 저전력 블루투스(BLE) 신호만 봅니다. 아무것도 잡히지 않아도 부정행위가 없다는 뜻은 아닙니다. LTE만 쓰는 기기는 보이지 않습니다.", color = RfColors.textDim, style = MaterialTheme.typography.labelSmall)
                 when (phase) {
                     GuardPhase.READY -> MainButton("빈 교실 측정 시작", onClick = onStart)
                     GuardPhase.COLLECT -> MainButton(if (collected || elapsed >= COLLECT_SECONDS) "빈 교실 기록 저장" else "빈 교실 기록 저장 · ${minSec(COLLECT_SECONDS - elapsed)} 뒤",
@@ -243,6 +206,48 @@ fun GuardScreen(vm: AppViewModel, permissionMissing: Boolean, onStart: () -> Uni
         dismissButton = { TextButton(onClick = { confirmStop = false }) { Text("계속 감시") } })
 }
 
+/** 무선마다 마지막으로 받은 시각과 탐색 문제. 가상 전파로 도는 자동 테스트에서는 실제 탐색기를 쓰지 않는다. */
+private fun radioLines(vm: AppViewModel, problems: List<RadioProblem>, simulation: Boolean, nowMs: Long): List<RadioLine> {
+    if (simulation) return listOf(RadioLine("가상 전파", "자동 테스트용 가상 신호"))
+    fun ago(atMs: Long) = minSec(((nowMs - atMs).coerceAtLeast(0) / 1000).toInt()) + " 전"
+    val wifiDone = vm.wifi.lastCompletedAtMs
+    val wifi = when {
+        RadioProblem.WIFI_OFF in problems -> RadioLine("와이파이", "꺼져 있음", problem = true)
+        RadioProblem.LOCATION_OFF in problems -> RadioLine("와이파이", "위치가 꺼져 있어 목록을 받지 못함", problem = true)
+        wifiDone == null -> RadioLine("와이파이", vm.wifi.lastError ?: "첫 탐색 결과를 기다리는 중", problem = vm.wifi.lastError != null)
+        // 탐색 간격은 30초다. 90초 넘게 완료 알림이 없으면 시스템이 막고 있는 것으로 본다.
+        nowMs - wifiDone > 90_000 -> RadioLine("와이파이", "${ago(wifiDone)} 탐색 완료 · 새 결과 없음", problem = true)
+        else -> RadioLine("와이파이", "${ago(wifiDone)} 탐색 완료 · ${vm.wifi.completedScans}회")
+    }
+    val bleReceived = vm.ble.lastReceivedAtMs
+    val ble = when {
+        RadioProblem.BLUETOOTH_OFF in problems -> RadioLine("블루투스", "꺼져 있음", problem = true)
+        vm.ble.lastError != null -> RadioLine("블루투스", vm.ble.lastError!!, problem = true)
+        !vm.ble.active -> RadioLine("블루투스", "탐색이 멈춰 있음", problem = true)
+        bleReceived == null -> RadioLine("블루투스", "아직 받은 신호 없음")
+        else -> RadioLine("블루투스", "${ago(bleReceived)} 수신")
+    }
+    return listOf(wifi, ble)
+}
+
+/** 빈 교실 측정 진행. elapsed는 측정을 시작한 뒤 지난 초. */
+@Composable
+private fun CollectPanel(collected: Boolean, elapsed: Int, bleCount: Int, wifiCount: Int) {
+    GuardPanel {
+        Text(if (collected) "충분히 모았습니다" else "빈 교실 전파를 모으는 중", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("블루투스 ${bleCount}개", style = MaterialTheme.typography.titleMedium)
+            Text("와이파이 ${wifiCount}개", style = MaterialTheme.typography.titleMedium)
+        }
+        LinearProgressIndicator(progress = { (elapsed / COLLECT_SECONDS.toFloat()).coerceAtMost(1f) }, modifier = Modifier.fillMaxWidth())
+        Text(when {
+            collected -> "아래 버튼을 누르면 지금까지 잡힌 ${bleCount + wifiCount}개를 이 교실에 원래 있던 전파로 기록하고 감시를 시작합니다."
+            elapsed < COLLECT_SECONDS -> "${minSec(COLLECT_SECONDS - elapsed)} 남음. 교실 안을 천천히 한 바퀴 걸어 보세요. 늦게 잡히는 전파까지 기록해야 시험 중에 새 전파로 잘못 뜨지 않습니다."
+            else -> "와이파이 탐색이 끝나기를 기다리는 중입니다. 잠시 뒤 저장할 수 있습니다."
+        }, color = if (collected) RfColors.primary else RfColors.textDim)
+    }
+}
+
 /** 한 전파에 다가가며 세기를 보는 화면. */
 @Composable
 fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
@@ -256,7 +261,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
     if (device == null) { LaunchedEffect(Unit) { close() }; return }
     val (kind, symbol) = plainKind(device)
     val live = device.presence != SignalPresence.HISTORY
-    val accent = if (live) classAccent(device.distanceClass) else RfColors.textDim
+    val accent = proximityColor(device)
     // 새 전파로 올라온 것만 "확인함"으로 뺄 수 있다. 원래 있던 전파는 뺄 목록이 없다.
     val flaggedGroup = (watch.wifi + watch.bluetooth + watch.far).firstOrNull { it.key == device.groupKey }
     val flagged = flaggedGroup != null
@@ -281,7 +286,7 @@ fun FindScreen(vm: AppViewModel, trackingKey: String, onBack: () -> Unit) {
                 Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     ProximityBars(device, barWidth = 44.dp, maxHeight = 150.dp)
                     Text(proximityLabel(device), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = accent)
-                    if (live) estimateDistance(device.rssiEma, device.referenceRssiAt1m)?.let { Text("${it.label} 추정", color = RfColors.textDim) }
+                    if (device.presence == SignalPresence.RECENT) estimateDistance(device.rssiEma, device.referenceRssiAt1m)?.let { Text("${it.label} 추정", color = RfColors.textDim) }
                 }
             }
             Text(if (live) "휴대폰을 들고 천천히 걸어 보세요. 막대가 늘어나는 쪽에 기기가 있습니다." else "지금은 잡히지 않습니다. 다시 나타나면 막대가 올라갑니다.")
@@ -448,7 +453,15 @@ private fun presenceText(device: TrackedDevice) = when (device.presence) {
     SignalPresence.HISTORY -> "사라짐"
 }
 
-private fun proximityLabel(device: TrackedDevice) = if (device.presence == SignalPresence.HISTORY) "안 잡힘" else device.distanceClass.label
+/** 잠시 끊긴 전파는 마지막 세기를 지금 거리처럼 보이지 않게 마지막 수신 시각을 보여 준다. */
+private fun proximityLabel(device: TrackedDevice) = when (device.presence) {
+    SignalPresence.HISTORY -> "안 잡힘"
+    SignalPresence.QUIET -> "${device.lastSeenAgeSeconds}초 전"
+    SignalPresence.RECENT -> device.distanceClass.label
+}
+
+/** 지금 잡히는 전파만 거리 색을 쓴다. */
+private fun proximityColor(device: TrackedDevice) = if (device.presence == SignalPresence.RECENT) classAccent(device.distanceClass) else RfColors.textDim
 
 private fun LazyListScope.problemItems(problems: List<RadioProblem>) {
     items(problems, key = { "problem-$it" }) { problem ->
@@ -511,7 +524,7 @@ private fun KnownCard(group: KnownGroup, open: Boolean, onClick: () -> Unit) {
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (strongest != null) ProximityBars(strongest)
-                Text(if (strongest != null) proximityLabel(strongest) else "안 잡힘", color = if (strongest != null) classAccent(strongest.distanceClass) else RfColors.textDim, style = MaterialTheme.typography.labelMedium)
+                Text(if (strongest != null) proximityLabel(strongest) else "안 잡힘", color = if (strongest != null) proximityColor(strongest) else RfColors.textDim, style = MaterialTheme.typography.labelMedium)
             }
         }
     }
@@ -650,16 +663,6 @@ private fun GuardHowTo(step: String, text: String) {
 }
 
 @Composable
-private fun GuardCount(label: String, count: Int, modifier: Modifier = Modifier) {
-    Surface(color = RfColors.surfaceAlt, shape = RoundedCornerShape(14.dp), modifier = modifier) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(label, color = RfColors.textDim, style = MaterialTheme.typography.labelMedium)
-            Text("${count}개", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
-        }
-    }
-}
-
-@Composable
 private fun GuardSectionTitle(symbol: RfSymbol, title: String, summary: String) {
     Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         RfGlyph(symbol, size = 20.dp)
@@ -683,7 +686,7 @@ private fun ProximityBars(device: TrackedDevice, barWidth: Dp = 7.dp, maxHeight:
     }
     Row(Modifier.semantics { contentDescription = "가까운 정도 4단계 중 $filled" }, verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(barWidth / 2)) {
         repeat(4) { index ->
-            Box(Modifier.width(barWidth).height(maxHeight * (index + 1) / 4).background(if (index < filled) classAccent(device.distanceClass) else RfColors.surfaceAlt, RoundedCornerShape(2.dp)))
+            Box(Modifier.width(barWidth).height(maxHeight * (index + 1) / 4).background(if (index < filled) proximityColor(device) else RfColors.surfaceAlt, RoundedCornerShape(2.dp)))
         }
     }
 }
@@ -705,8 +708,33 @@ private fun SignalCard(device: TrackedDevice, groupNote: String? = null, calm: B
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ProximityBars(device)
-                Text(proximityLabel(device), color = if (live) classAccent(device.distanceClass) else RfColors.textDim, style = MaterialTheme.typography.labelMedium)
+                Text(proximityLabel(device), color = proximityColor(device), style = MaterialTheme.typography.labelMedium)
             }
         }
+    }
+}
+
+private fun previewDevice(name: String?, source: ScanSource, rssi: Double, distance: DistanceClass, presence: SignalPresence = SignalPresence.RECENT,
+    ids: Set<Int> = emptySet(), hints: Set<SignalHint> = emptySet()) = TrackedDevice(
+    key = if (source == ScanSource.BLE) "5A:3C:11:20:7F:01" else "DA:01:02:03:04:05", displayName = name ?: "BLE 기기 7F:01", source = source,
+    hidden = false, rssiEma = rssi, distanceClass = distance, firstSeenMs = 1_731_900_000_000, lastSeenMs = 1_731_900_060_000,
+    manufacturerIds = ids, presence = presence, hints = hints, lastSeenAgeSeconds = if (presence == SignalPresence.RECENT) 0 else 12)
+
+@Preview(name = "새 전파 줄", widthDp = 360, backgroundColor = 0xFF0A1118, showBackground = true)
+@Composable
+private fun SignalCardPreview() = AppRfTheme {
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SignalCard(previewDevice("AirPods Pro", ScanSource.BLE, -52.0, DistanceClass.VERY_CLOSE, ids = setOf(76), hints = setOf(SignalHint.APPLE_AUDIO))) {}
+        SignalCard(previewDevice("SCHOOL", ScanSource.WIFI, -71.0, DistanceClass.NEAR), "빈 교실 와이파이와 이름만 같은 다른 기기") {}
+        SignalCard(previewDevice(null, ScanSource.BLE, -80.0, DistanceClass.FAR, SignalPresence.QUIET, ids = setOf(117))) {}
+    }
+}
+
+@Preview(name = "빈 교실 측정", widthDp = 360, backgroundColor = 0xFF0A1118, showBackground = true)
+@Composable
+private fun CollectPanelPreview() = AppRfTheme {
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        CollectPanel(collected = false, elapsed = 47, bleCount = 6, wifiCount = 3)
+        CollectPanel(collected = true, elapsed = 150, bleCount = 9, wifiCount = 4)
     }
 }
