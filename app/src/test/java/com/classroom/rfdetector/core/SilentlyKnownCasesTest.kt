@@ -4,9 +4,8 @@ import org.junit.Assert.*
 import org.junit.Test
 
 /**
- * 감시 중 새로 잡혔는데도 "원래 있던 전파"로 넘어가거나 알림 없이 개수만 세는 경우를 지금 동작 그대로 고정한다.
- * 모두 기기가 스스로 정할 수 있는 값(이름, 주소, 광고 내용)만으로 생긴다. 규칙을 바꾸는 PR은 해당 기대값을 바꾸면 된다.
- * 실제 전파로 재현한 것은 아니다.
+ * 감시 중 새로 잡혔는데도 "원래 있던 전파"로 넘어가거나 개수만 세는 경우의 지금 동작이다. 지켜야 할 요구 사항이 아니다.
+ * 각 테스트 위에 정해진 규칙인지, 다른 규칙의 부수 효과인지 적었다. 규칙을 바꾸는 PR은 기대값을 고치면 된다.
  */
 class SilentlyKnownCasesTest {
     private val tracker = DeviceTracker()
@@ -29,7 +28,8 @@ class SilentlyKnownCasesTest {
         return emptyRoom(1_000)
     }
 
-    @Test fun anyNameOnAnAddressOneOctetAwayFromAnEmptyRoomRouterIsKnown() {
+    // 정해진 규칙(upstream #7에서 유지). 이름을 보지 않는다는 점은 따로 논의된 적이 없다.
+    @Test fun anyNameOnAnAddressDifferingOnlyInTheFirstOrLastByteIsKnown() {
         val record = schoolRoom()
         // 이름이 전혀 다르고 신호가 세도, 마지막 자리만 다른 주소는 같은 공유기로 본다(isSameAccessPoint).
         wifi("00:11:22:33:44:11", 600_000, "CAM-7F21", rssi = -35)
@@ -41,6 +41,7 @@ class SilentlyKnownCasesTest {
         assertTrue(view.knownGroups.any { group -> group.live.any { it.key == "00:11:22:33:44:11" } })
     }
 
+    // README에 적힌 한계. upstream #42가 바꾸려는 동작이다.
     @Test fun theSameNameOnAnUnrelatedUniversalAddressIsKnown() {
         val record = schoolRoom()
         // 다른 회사 번호를 가진 고유 주소. 이름만 같으면 원래 있던 와이파이로 본다.
@@ -48,6 +49,7 @@ class SilentlyKnownCasesTest {
         assertEquals(0, watch(record, 601_000).count)
     }
 
+    // 부수 효과. 이름 묶음 키를 만들 때 생기는 것으로, 와이파이에 대해 정한 적은 없다.
     @Test fun nameComparisonIgnoresCaseAndSurroundingSpaces() {
         val record = schoolRoom()
         // 와이파이 이름은 바이트 그대로 비교되는 값인데, 묶음 키는 소문자로 바꾸고 앞뒤 공백을 지운다.
@@ -55,6 +57,7 @@ class SilentlyKnownCasesTest {
         assertEquals(0, watch(record, 601_000).count)
     }
 
+    // 정해진 규칙(upstream #45). 둘째·셋째 자리 예외는 실측 근거가 없는 값이다.
     @Test fun theSameNameOnARandomAddressIsFlaggedUnlessItSharesTheRoutersSecondAndThirdOctets() {
         val record = schoolRoom()
         // 임의 주소로 이름을 따라 하면 알린다(#45).
@@ -66,6 +69,7 @@ class SilentlyKnownCasesTest {
         assertEquals(listOf("DA:01:02:03:04:05"), watch(record, 601_000).wifi.single().devices.map { it.key })
     }
 
+    // 정해진 규칙(꺼서 제출한 아이폰). 이 분류가 광고 내용만으로 정해진다는 점이 문제다.
     @Test fun findMyFormatIsCountedButNeverAlertedWhateverTheCountOrStrength() {
         ble("AA:00:00:00:00:01", 0, hints = setOf(SignalHint.APPLE_ACTIVE))
         val record = emptyRoom(1_000)
@@ -79,6 +83,7 @@ class SilentlyKnownCasesTest {
         assertEquals(5, view.findMy.size)
     }
 
+    // 부수 효과. 종류 단서 우선순위(hints.primary)에서 생긴다.
     @Test fun aFindMyFrameAloneDecidesTheGroupEvenWithOtherCompanyIds() {
         val record = emptyRoom(0)
         // 광고에 다른 회사 코드가 함께 있어도, 종류 단서가 나의 찾기 하나뿐이면 나의 찾기로 분류된다.
@@ -88,6 +93,7 @@ class SilentlyKnownCasesTest {
         assertEquals(1, view.findMy.size)
     }
 
+    // 설계 문서의 알려진 한계("같은 생김새를 맞바꾸면 알 수 없다").
     @Test fun aDeviceThatTakesOverAnEmptyRoomNameAfterTheOriginalLeavesIsKnown() {
         ble("AA:00:00:00:00:01", 0, name = "Galaxy Buds2 Pro", ids = setOf(117))
         val record = emptyRoom(1_000)
@@ -96,6 +102,7 @@ class SilentlyKnownCasesTest {
         assertEquals(0, watch(record, 721_000).count)
     }
 
+    // 대조군: 원래 기기가 남아 있으면 개수 비교로 잡힌다.
     @Test fun theSameTakeoverIsFlaggedWhileTheOriginalIsStillPresent() {
         ble("AA:00:00:00:00:01", 0, name = "Galaxy Buds2 Pro", ids = setOf(117))
         val record = emptyRoom(1_000)
