@@ -59,7 +59,7 @@ class DeviceIdentityTest {
         assertTrue(companies.size >= 4000)
     }
 
-    @Test fun repeatedLookupsMatchAFreshResolverEvenAfterOldEntriesAreDropped() {
+    @Test fun lookupsPastTheCacheSizeStillMatchAFreshResolver() {
         val vendors = mapOf("001122" to "Registered Vendor")
         val companies = mapOf(76 to "Apple, Inc.")
         val cached = DeviceIdentityResolver(vendors, companies)
