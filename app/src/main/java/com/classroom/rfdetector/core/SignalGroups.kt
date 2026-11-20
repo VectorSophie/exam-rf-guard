@@ -41,6 +41,19 @@ val TrackedDevice.groupKey: String get() = signalGroupKey(source, key, displayNa
 val TrackedDevice.acknowledgeKey: String get() = groupKey.let { group ->
     if (group == HIDDEN_WIFI_KEY) "$HIDDEN_WIFI_KEY:${key.uppercase(Locale.ROOT)}" else group
 }
+
+/**
+ * 나의 찾기 신호로 따로 세는 BLE. 오프라인 찾기 광고는 Apple 회사 코드 하나만 쓰고 이름을 알리지 않는다.
+ * 다른 회사 코드나 기기 이름이 함께 오면 나의 찾기 프레임이 있어도 일반 기기처럼 판단한다.
+ */
+private fun isFindMyOnly(source: ScanSource, address: String, name: String, manufacturerIds: Set<Int>, hints: Set<SignalHint>): Boolean =
+    source == ScanSource.BLE && hints.primary == SignalHint.APPLE_FIND_MY && manufacturerIds == setOf(APPLE_COMPANY_ID) && advertisedName(address, name) == null
+
+private const val APPLE_COMPANY_ID = 0x004C
+
+val TrackedDevice.findMyOnly: Boolean get() = isFindMyOnly(source, key, displayName, manufacturerIds, hints)
+val SnapshotSignal.findMyOnly: Boolean get() = isFindMyOnly(source, address, name, manufacturerIds, hints)
+
 val SnapshotSignal.groupKey: String get() = signalGroupKey(source, address, name, manufacturerIds, hints)
 
 /** 빈 교실 기록에서 묶음마다 동시에 몇 개였는지. 저장 순간 잡히지 않던 묶음은 1개로 친다. */
@@ -60,7 +73,7 @@ data class KnownGroup(val key: String, val sample: SnapshotSignal?, val baseline
 
 /** 빈 교실 기록의 묶음별 대표를 고정된 순서로: 와이파이 먼저, 그 안에서는 기록 당시 센 순서. */
 fun baselineSamples(baseline: SignalSnapshot): List<SnapshotSignal> = baseline.signals
-    .filterNot { it.source == ScanSource.BLE && it.hints.primary == SignalHint.APPLE_FIND_MY }
+    .filterNot { it.findMyOnly }
     .groupBy { it.groupKey }.values.map { group -> group.maxBy { it.rssi ?: Double.NEGATIVE_INFINITY } }
     .sortedWith(compareBy<SnapshotSignal> { it.source != ScanSource.WIFI }.thenByDescending { it.rssi ?: Double.NEGATIVE_INFINITY }.thenBy { it.groupKey })
 
@@ -103,7 +116,7 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
     samples: List<SnapshotSignal> = emptyList()): WatchView {
     val live = devices.filter { it.presence != SignalPresence.HISTORY }
     // 전원을 끈 아이폰과 에어태그가 내는 신호. 제출한 휴대폰 수만큼 잡힐 수 있어 알리지 않고 따로 센다.
-    val (findMy, others) = live.partition { it.source == ScanSource.BLE && it.hints.primary == SignalHint.APPLE_FIND_MY }
+    val (findMy, others) = live.partition { it.findMyOnly }
     // 이름을 숨긴 것까지 포함해, 빈 교실에 있던 공유기가 뒤늦게 내보인 다른 주소는 원래 있던 것이다.
     val rest = others.filterNot { it.source == ScanSource.WIFI && isSameAccessPoint(it.key, baselineWifi) }
         .filterNot { sharesVendorWithEmptyRoomRouter(it, baseline, baselineWifi) }
@@ -148,7 +161,7 @@ fun watchView(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowle
 private fun knownGroups(devices: List<TrackedDevice>, baseline: Map<String, Int>, acknowledged: Set<String>, baselineWifi: Set<String>,
     samples: List<SnapshotSignal>): List<KnownGroup> {
     val byStrength = compareByDescending<TrackedDevice> { it.rssiEma ?: Double.NEGATIVE_INFINITY }
-    val members = devices.filterNot { it.source == ScanSource.BLE && it.hints.primary == SignalHint.APPLE_FIND_MY }.groupBy { it.groupKey }
+    val members = devices.filterNot { it.findMyOnly }.groupBy { it.groupKey }
     fun row(key: String, sample: SnapshotSignal?): KnownGroup {
         val all = members[key].orEmpty()
         return KnownGroup(key, sample, baseline[key] ?: 0, all.filter { it.presence != SignalPresence.HISTORY }.sortedWith(byStrength), all.maxByOrNull { it.lastSeenMs })

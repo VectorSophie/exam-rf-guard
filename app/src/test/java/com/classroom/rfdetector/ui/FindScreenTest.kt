@@ -57,7 +57,9 @@ class FindScreenTest {
         address: String = "AA:BB:CC:DD:EE:01",
         source: ScanSource = ScanSource.BLE,
         hints: Set<SignalHint> = emptySet(),
-    ) = RfObservation(address, source, "New test signal", -60, null, false, System.currentTimeMillis(), hints = hints)
+        name: String? = "New test signal",
+        manufacturerIds: Set<Int> = emptySet(),
+    ) = RfObservation(address, source, name, -60, null, false, System.currentTimeMillis(), manufacturerIds, hints)
 
     private fun replaceObservation(observation: RfObservation) {
         compose.runOnIdle {
@@ -110,7 +112,8 @@ class FindScreenTest {
     }
 
     @Test fun newFindMySignalIsNotLabeledAsRecordedInTheEmptyRoom() {
-        val signal = observation(hints = setOf(SignalHint.APPLE_FIND_MY))
+        // 나의 찾기 단서는 Apple 제조사 데이터에서만 나오고, 그 광고는 이름을 알리지 않는다.
+        val signal = observation(hints = setOf(SignalHint.APPLE_FIND_MY), name = null, manufacturerIds = setOf(76))
         replaceObservation(signal)
         assertEquals(signal.trackingKey, vm.watch.value.findMy.single().trackingKey)
         show(signal)

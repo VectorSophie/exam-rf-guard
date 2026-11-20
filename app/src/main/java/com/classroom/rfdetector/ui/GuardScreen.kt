@@ -437,7 +437,7 @@ private fun infoRows(device: TrackedDevice): List<Pair<String, String>> = buildL
 /** 의심으로 읽히기 쉬운 종류에 붙이는 설명. */
 private fun kindNote(device: TrackedDevice): String? = when {
     SignalHint.HEARING_AID in device.hints -> "보청기는 허용된 의료기기일 수 있습니다."
-    SignalHint.APPLE_FIND_MY in device.hints -> "에어태그이거나, 전원을 끈 아이폰이 내는 신호일 수 있습니다. 꺼서 제출한 휴대폰도 이렇게 보일 수 있습니다."
+    device.findMyOnly -> "에어태그이거나, 전원을 끈 아이폰이 내는 신호일 수 있습니다. 꺼서 제출한 휴대폰도 이렇게 보일 수 있습니다."
     SignalHint.HOTSPOT in device.hints -> "와이파이 이름이 휴대폰 핫스팟의 기본 이름과 비슷합니다. 이름은 바꿀 수 있어 확정은 아닙니다."
     else -> null
 }
