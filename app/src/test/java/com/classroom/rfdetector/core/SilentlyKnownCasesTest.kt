@@ -69,7 +69,7 @@ class SilentlyKnownCasesTest {
         assertEquals(listOf("DA:01:02:03:04:05"), watch(record, 601_000).wifi.single().devices.map { it.key })
     }
 
-    // 정해진 규칙(꺼서 제출한 아이폰). 이 분류가 광고 내용만으로 정해진다는 점이 문제다.
+    // 정해진 규칙(꺼서 제출한 아이폰). 실제 오프라인 찾기 광고처럼 Apple 회사 코드 하나에 이름이 없으면 흉내 낸 것도 구분하지 못한다.
     @Test fun findMyFormatIsCountedButNeverAlertedWhateverTheCountOrStrength() {
         ble("AA:00:00:00:00:01", 0, hints = setOf(SignalHint.APPLE_ACTIVE))
         val record = emptyRoom(1_000)
@@ -83,14 +83,14 @@ class SilentlyKnownCasesTest {
         assertEquals(5, view.findMy.size)
     }
 
-    // 부수 효과. 종류 단서 우선순위(hints.primary)에서 생긴다.
-    @Test fun aFindMyFrameAloneDecidesTheGroupEvenWithOtherCompanyIds() {
+    // 오프라인 찾기 광고는 31바이트를 Apple 제조사 데이터 하나로 다 쓴다. 다른 회사 코드나 이름이 같이 오면 그 광고가 아니다.
+    @Test fun aFindMyFrameWithAnotherCompanyIdOrANameIsJudgedLikeAnyOtherDevice() {
         val record = emptyRoom(0)
-        // 광고에 다른 회사 코드가 함께 있어도, 종류 단서가 나의 찾기 하나뿐이면 나의 찾기로 분류된다.
-        (0..6).forEach { step -> ble("CC:00:00:00:00:09", 600_000L + step * 10_000, rssi = -35, ids = setOf(76, 117), hints = setOf(SignalHint.APPLE_FIND_MY)) }
-        val view = watch(record, 661_000)
-        assertEquals(0, view.count)
-        assertEquals(1, view.findMy.size)
+        ble("CC:00:00:00:00:09", 600_000, rssi = -35, ids = setOf(76, 0x02E5), hints = setOf(SignalHint.APPLE_FIND_MY))
+        ble("CC:00:00:00:00:0A", 600_000, name = "ESP32-BLE", rssi = -35, hints = setOf(SignalHint.APPLE_FIND_MY))
+        val view = watch(record, 601_000)
+        assertEquals(0, view.findMy.size)
+        assertEquals(setOf("CC:00:00:00:00:09", "CC:00:00:00:00:0A"), view.bluetooth.flatMap { group -> group.devices.map { it.key } }.toSet())
     }
 
     // 설계 문서의 알려진 한계("같은 생김새를 맞바꾸면 알 수 없다").
